@@ -1,0 +1,88 @@
+#!/usr/bin/env perl
+use warnings; use strict; use feature 'say';
+use lib 'lib';
+use MyApp::Schema;
+
+my $line;
+my $i;
+my $JE=0;
+
+my $db_fn = 'db/example.db';
+my $schema = MyApp::Schema->connect("dbi:SQLite:$db_fn");
+
+my $artist = $schema->resultset('Artist')->create( { name => 'Dead Salmon' } );
+say $artist->events->count;    # is now 1, an 'insert' event
+jt();
+
+
+$artist->change_name('Trout');    # add a name_change event
+jt();
+$artist->update;    # An update event, last_name_change_id and name
+jt();
+
+# Find their previous name
+my $name_change = $artist->last_name_change;
+say $name_change->details->{old};
+
+# Three more name_change events and one update event
+$artist->change_name('Fried Trout');
+jt(); # stuff3
+$artist->change_name('Poached Trout in a White Wine Sauce');
+jt();
+$artist->change_name('Herring');
+jt();
+$artist->update;
+jt();
+
+# Look up all the band's previous names
+print "$_\n"
+    for map { $_->details->{old} }
+        $artist->events->search( { event => 'name_change' } );
+
+$artist->delete;    # and then they break up.
+jt();
+
+# We can find out now when they broke up, if we remember their id.
+my $deleted_on
+    = $schema->resultset('ArtistEvent')
+    ->single( { artistid => $artist->id, event => 'delete' } )
+    ->triggered_on;
+
+# Find the state of the band was just before the breakup.
+my $state_before_breakup
+    = $artist-> state_at( $deleted_on->subtract( seconds => 1 ) );
+
+# Maybe this is common,
+# so we have a column to link to who they used to be.
+my $previous_artist_id = delete $state_before_breakup->{artistid};
+jt();
+
+# Then we can form a new band, linked to the old,
+# with the same values as the old band, but a new name.
+$artist = $schema->resultset('Artist')->create( {
+    %{$state_before_breakup},
+    previousid => $previous_artist_id,
+    name       => 'Red Herring',
+} );
+say 'Red Herring';
+jt();
+
+# After a few more name changes, split-ups, and getting back together,
+# we find an event we should have considered, but didn't.
+my $death_event
+    = $artist->event( death => { details => { who => 'drummer' } } );
+
+# but, we then go back and modify it to note that it was only a rumor
+$death_event->details->{only_a_rumour} = 1;
+$death_event->make_column_dirty('details'); # changing the hashref doesn't
+jt();
+$death_event->update;
+jt();
+
+# And after even more new names and arguments, they split up again
+$artist->delete;
+jt();
+
+sub jt {
+  if ($JE) { say "stopped",$i++; $line = <STDIN>; }
+}

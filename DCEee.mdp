@@ -1,0 +1,224 @@
+%title: DBIx::Class::Events
+%author: James Edwards
+%date: 2019-18-July
+
+-> Log some database changes with DBIx::Class::Events : Slide 1 <-
+=========
+
+CREATE TABLE "employee" (
+  "employee_id"    INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  "ee_number"      text NOT NULL,
+  "first_name"     text NOT NULL,
+  "last_name"      text NOT NULL,
+  "address"        text NOT NULL,
+  UNIQUE(employee_id)
+);
+
+-------------------------------------------------
+
+-> # DBIx::Class::Events : Slide 2 <-
+
+I wish to log all changes to
+
+   first name
+   last name
+   address
+
+-------------------------------------------------
+
+-> # DBIx::Class::Events : Slide 3 <-
+
+CREATE TABLE "employee" (
+  "employee_id"           INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  "ee_number"             text NOT NULL,
+  "first_name"            text NOT NULL,
+  "last_name"             text NOT NULL,
+  "address"               text NOT NULL,
+  *"last_info_change_id"*   INTEGER *NOT* NULL *DEFAULT -1,*
+  UNIQUE(employee_id),
+  *FOREIGN KEY ("last_info_change_id")   REFERENCES "employee_event"("employee_event_id"),*
+);
+
+In the POD example 'last_name_change_id" can be NULL but it gave me SQL warnings.
+Therefore the DEFAULT -1
+
+-------------------------------------------------
+
+-> # DBIx::Class::Events : Slide 4 <-
+
+CREATE TABLE "employee_event" (
+  "employee_event_id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  "employee_id"       INTEGER NOT NULL,
+  "event"             VARCHAR(32) NOT NULL,
+  "triggered_on"      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "details"           LONGTEXT,
+  UNIQUE(employee_event_id),
+  FOREIGN KEY ("employee_id") REFERENCES "employee"("employee_id") ON UPDATE CASCADE
+);
+CREATE INDEX "employee_event_idx" ON "employee_event" ("employee_id", "event", "triggered_on")
+
+-------------------------------------------------
+
+-> # MyApp::Schema::Result::Employee : Slide 5 <-
+
+*Changes to Table being Tracked
+
+__PACKAGE__->load_components( qw/ Events / );
+
+\# A different name can be used with the "events_relationship" attribute
+__PACKAGE__->has_many(
+    'events' => ( 'MyApp::Schema::Result::EmployeeEvent', 'employee_id' ),
+    { cascade_delete => 0 },
+);
+
+__PACKAGE__->has_one(
+    'last_info_change'        => 'MyApp::Schema::Result::EmployeeEvent',
+    { 'foreign.employee_event_id' => 'self.last_info_change_id' },
+    { cascade_delete          => 0 },
+);
+
+-------------------------------------------------
+
+-> # MyApp::Schema::Result::Employee : Continue : Slide 6 <-
+
+sub change_last_name {
+    my ( $self, $new_last_name ) = @_;
+    my $event = $self->event( ee_info_change =>
+        { details => { new => $new_last_name, old => $self->last_name } } );
+    $self->last_info_change( $event );
+    \# $self->update; # be lazy and make our caller call ->update
+    $self->last_name( $new_last_name );
+}
+
+-------------------------------------------------
+
+-> # MyApp::Schema::Result::Employee : Continue : Slide 7 <-
+
+sub change_first_name {
+    my ( $self, $new_first_name ) = @_;
+    my $event = $self->event( ee_info_change =>
+        { details => { new => $new_first_name, old => $self->first_name } } );
+    $self->last_info_change( $event );
+    \# $self->update; # be lazy and make our caller call ->update
+    $self->first_name( $new_first_name );
+}
+
+-------------------------------------------------
+
+-> # MyApp::Schema::Result::Employee : Continue : Slide 8 <-
+
+sub change_address {
+    my ( $self, $new_address ) = @_;
+    my $event = $self->event( ee_info_change =>
+        { details => { new => $new_address, old => $self->address } } );
+    $self->last_info_change( $event );
+    \# $self->update; # be lazy and make our caller call ->update
+    $self->address( $new_address );
+}
+
+-------------------------------------------------
+
+-> # MyApp::Schema::Result::EmployeeEvent : Slide 9 <-
+
+*Now to the Tracking Table*
+
+\# You should set up automatic inflation/deflation of the details column
+\# as it is used this way by "state_at" and the insert/update/delete
+\# events.  Does not have to be JSON, just be able to serialize a hashref
+use JSON::PP ();
+{
+    my $json = JSON::PP->new->utf8;
+    __PACKAGE__->inflate_column( 'details' => {
+        inflate => sub { $json->decode(shift) },
+        deflate => sub { $json->encode(shift) },
+    } );
+}
+
+
+-------------------------------------------------
+
+-> # MyApp::Schema::Result::EmployeeEvent : Continue : Slide 10 <-
+
+\# A path back to the object that this event is for,
+\# not required unlike the has_many "events" relationship above
+__PACKAGE__->belongs_to(
+    'employee' => ( 'MyApp::Schema::Result::Employee', 'employee_id' ) );
+
+-------------------------------------------------
+
+-> # my example : e1.pl : Slide 11 <-
+
+my $ee = $schema->resultset('Employee')->create( {
+    ee_number  => 101,
+    first_name => 'Herman',
+    last_name  => 'Munster',
+    address    => '1313 Mocking Bird Lane',
+    } );
+say $ee->events->count;            # is now 1, an 'insert' event
+$ee->change_last_name('Smith');    # add a employee change event
+$ee->update;                       # An update event, last_info_change_id and name
+
+-------------------------------------------------
+
+-> # my example : e1.pl : Continue : Slide 12 <-
+
+\# Find their previous name
+my $name_change = $ee->last_info_change;
+print $name_change->details->{old}, "\\n";   # Munster
+
+$ee->change_first_name('Don');    # add a employee change event
+$ee->update;                      # An update event, last_info_change_id and name
+
+\# Find their previous name
+$name_change = $ee->last_info_change;
+print $name_change->details->{old}, "\\n";   # Herman
+
+-------------------------------------------------
+
+-> # my example : e1.pl : Continue : Slide 13 <-
+
+$ee->change_address('1410 Cambridge Ave');    # add a employee change event
+$ee->update;                                  # An update event, last_info_change_id and name
+
+\# Find their previous address
+my $addr_change = $ee->last_info_change;
+print $addr_change->details->{old}, "\\n";    # 1313 Mocking Bird Lane
+
+----
+
+-> # Log Info : Slide 14 <-
+
+employee_id ee_number first_name  last_name   address             last_info_change_id
+\----------- --------- ----------  ----------  ------------------  ------------------- 
+1           101       Don         Smith       1410 Cambridge Ave  6                                    
+
+employee_event_id employee_id event          triggered_on        
+\----------------- ----------- ----------     ------------------- 
+    details
+\    ---------------------------------------------------------------------------------------------------
+1                 1           insert         2019-07-23 04:20:29 
+    {"last_name":"Munster","ee_number":101,"employee_id":1,"address":"1313 Mocking Bird Lane",
+     "first_name":"Herman"}
+2                 1           ee_info_change 2019-07-23 04:20:29 
+    {"new":"Smith","old":"Munster"}
+3                 1           update         2019-07-23 04:20:29 
+    {"last_name":"Smith","last_info_change_id":2}
+
+----
+
+-> # Log Info : Slide 15 <-
+
+
+employee_event_id employee_id event          triggered_on        
+\----------------- ----------- ----------     ------------------- 
+    details
+\    ---------------------------------------------------------------------------------------------------
+4                 1           ee_info_change 2019-07-23 04:20:29 
+    {"old":"Herman","new":"Don"}
+5                 1           update         2019-07-23 04:20:29 
+    {"last_info_change_id":4,"first_name":"Don"}
+6                 1           ee_info_change 2019-07-23 04:20:29 
+    {"old":"1313 Mocking Bird Lane","new":"1410 Cambridge Ave"}
+7                 1           update         2019-07-23 04:20:29 
+    {"last_info_change_id":6,"address":"1410 Cambridge Ave"}
+

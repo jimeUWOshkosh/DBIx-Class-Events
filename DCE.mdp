@@ -1,0 +1,434 @@
+%title: DBIx::Class::Events
+%author: James Edwards
+%date: 2019-18-July
+
+-> Log some database changes with DBIx::Class::Events : Slide 1 <-
+====
+
+From POD:
+A framework for capturing events that happen to a Result in a table,
+   insert
+       Logs all columns to the details column, with an insert event.
+   update
+       Logs dirty columns to the details column, with an update event.
+   delete
+       Logs all columns to the details column, with a delete event.
+are triggered automatically to track changes.
+
+Events can be used to track when things happen.
+   when a user on a website clicks a particular button
+   when a recipe was prepared
+   when a song was played
+   anything that doesn't fit in the main table
+
+----
+
+-> Log some database changes with DBIx::Class::Events : Slide 2 <-
+====
+
+My goal here is to NOT make this a firehose job.
+
+Your understanding/modification of the setup will have you
+looking at a sql of two tables ( your target and your new
+event table ) and Schema-Result modules of those two tables
+( in which you will be adding stuff to the 'save zone" in
+  those modules created by DBIx::Class::Schema::Loader )
+( OR if you roll your own Schema-Result modules, you already 
+  know where you to wish to place the stuff )
+
+----
+
+-> Log some database changes with DBIx::Class::Events : Slide 3 <-
+====
+
+So I have broken my work into three sections (MDPs)
+
+   Code usage of DCE (this presentation) {DCE.mdp}
+      DCE's example based on the DBIx::Class's example using the
+         Artist database which will track the changes to
+         Artist, CDs, Tracks tables in 3 separate event tables
+
+   My Employee example {DCEee.mdp}
+
+   DCE's example and the issue(s) caused when you try use to
+   DBIx::Class::Schema::Loader ( dbicdump, DBIx::Class:DeploymentHandler )
+   {DCEgs.mdp}
+
+----
+
+-> Basis : Slide 4 <-
+===
+
+This is using their SQL and their non-modified Schema files!!!
+
+$ git clone https://github.com/GrantStreetGroup/p5-DBIx-Class-Events.git
+$ cd p5-DBIx-Class-Events/t
+$ sqlite3 db/example.db < db/example.sql
+$ perl jime-s-t1.pl                           # get this from my code archive
+
+-------------------------------------------------
+
+-> Sample program in POD : Slide 5 <-
+=========
+
+my $artist = $schema->resultset('Artist')->create( { name => 'Dead Salmon' } );
+say $artist-> *events*-> *count*;    # is now 1, an 'insert' event
+
+$artist-> *change_name*('Trout');    # add a name_change event
+$artist->update;    # An update event, last_name_change_id and name
+
+\# Find their previous name  
+my $name_change = $artist-> *last_name_change *;
+say $name_change-> *details*->{old};
+
+\# Three more name_change events and one update event
+$artist-> *change_name*('Fried Trout');
+$artist-> *change_name*('Poached Trout in a White Wine Sauce'); 
+$artist-> *change_name*('Herring');
+$artist->update;
+...
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 6 <-
+
+my $artist = $schema->resultset('Artist')->create( { name => 'Dead Salmon' } );
+say $artist-> *events*->count;    # is now 1, an 'insert' event
+
+# 1
+
+Artist Table (artist)
+artistid    name         last_name_change_id  previousid
+----------  -----------  -------------------  ----------
+1           Dead Salmon                                 
+
+ArtistEvent Table (artist_event)
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+1        1         insert      {"artistid":1,"name":"Dead Salmon"}
+
+*Note*: Will NOT be displaying the 'triggered_on' attribute in the event table
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 7 <-
+
+$artist-> *change_name*('Trout');    # add a name_change event
+
+
+artistid    name         last_name_change_id  previousid
+----------  -----------  -------------------  ----------
+1           `Dead Salmon`                                 
+eventid  artistid    event       details                            
+-------  ----------  ----------  -----------------------------------
+1        1           insert      {"artistid":1,"name":"Dead Salmon"}
+*2*        1           name_change {"new":"Trout","old":"Dead Salmon"}
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 8 <-
+
+`$artist->change_name('Trout');    # add a name_change event    `
+$artist->update;    # An update event, last_name_change_id and name
+
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+1           *Trout*       *2*                             
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+1        1         insert      {"artistid":1,"name":"Dead Salmon"}
+2        1         name_change {"new":"Trout","old":"Dead Salmon"}
+*3*        1         update      {"last_name_change_id":2,"name":"Trout"}
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 9 <-
+
+\# Find their previous name
+my $name_change = $artist-> *last_name_change*;
+say $name_change-> *details*->{old};
+
+# Dead Salmon
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 10 <-
+
+\# Three more name_change events and one update event
+$artist-> *change_name*('Fried Trout');
+`$artist->change_name('Poached Trout in a White Wine Sauce');  `
+`$artist->change_name('Herring');                              `
+`$artist->update;                                              `
+
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+1           `Trout`       2                              
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+1        1         insert      {"artistid":1,"name":"Dead Salmon"}
+2        1         name_change {"new":"Trout","old":"Dead Salmon"}
+3        1         update      {"last_name_change_id":2,"name":"Trout"}
+*4*        1         name_change {"new":"Fried Trout","old":"Trout"}
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 11 <-
+
+\# Three more name_change events and one update event
+`$artist->change_name('Fried Trout');                          `
+$artist-> *change_name*('Poached Trout in a White Wine Sauce');  *
+`$artist->change_name('Herring');                              `
+`$artist->update;                                              `
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+1           `Trout`       2                              
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+1        1         insert      {"artistid":1,"name":"Dead Salmon"}
+2        1         name_change {"new":"Trout","old":"Dead Salmon"}
+3        1         update      {"last_name_change_id":2,"name":"Trout"}
+4        1         name_change {"new":"Fried Trout","old":"Trout"}
+*5*        1         name_change {"old":"Fried Trout","new":"Poached Trout in a White Wine Sauce"}
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 12 <-
+
+\# Three more name_change events and one update event
+`$artist->change_name('Fried Trout');                          `
+`$artist->change_name('Poached Trout in a White Wine Sauce');  `
+$artist-> *change_name*('Herring');                              *
+`$artist->update;                                              `
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+1           `Trout`       2                              
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+...
+4        1         name_change {"new":"Fried Trout","old":"Trout"}
+5        1         name_change {"old":"Fried Trout","new":"Poached
+5        1         name_change {"old":"Fried Trout","new":"Poached Trout in a White Wine Sauce"}
+*6*        1         name_change {"new":"Herring","old":"Poached Trout in a White Wine Sauce"}
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 13 <-
+
+\# Three more name_change events and one update event
+`$artist->change_name('Fried Trout');                          `
+`$artist->change_name('Poached Trout in a White Wine Sauce');  `
+`$artist->change_name('Herring');                              `
+$artist->update;
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+1           *Herring*     *6*                              
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+..
+4        1         name_change {"new":"Fried Trout","old":"Trout"}
+5        1         name_change {"old":"Fried Trout","new":"Poached
+6        1         name_change {"new":"Herring","old":"Poached Trout in a White Wine Sauce"}
+*7*        1         update      {"last_name_change_id":6,"name":"Herring"}
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 14 <-
+
+\# Look up all the band's previous names
+print "$_\\n"
+    for map { $_-> *details*->{old} }
+        $artist-> *events*->search( { event => 'name_change' } );
+# Dead Salmon
+# Trout
+# Fried Trout
+# Poached Trout in a White Wine Sauce
+
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+2        1         name_change {"new":"Trout","old":"Dead Salmon"}
+4        1         name_change {"new":"Fried Trout","old":"Trout"}
+5        1         name_change {"old":"Fried Trout","new":"Poached
+6        1         name_change {"new":"Herring","old":"Poached Trout in a White Wine Sauce"}
+
+-------------------------------------------------
+
+-> Sample program in POD : Continue : Slide 15 <-
+
+$artist->delete;    # and then they break up.   
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+`                                                      `
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+1        1         insert      {"artistid":1,"name":"Dead Salmon"}
+2        1         name_change {"new":"Trout","old":"Dead Salmon"}
+3        1         update      {"last_name_change_id":2,"name":"Trout"}
+4        1         name_change {"new":"Fried Trout","old":"Trout"}
+5        1         name_change {"old":"Fried Trout","new":"Poached
+6        1         name_change {"new":"Herring","old":"Poached Trout in a White Wine Sauce"}
+7        1         update      {"last_name_change_id":6,"name":"Herring"}
+*8*        1         delete      {"last_name_change_id":6,"name":"Herring","artitstid":1}
+
+-------------------------------------------------
+
+-> LETS GET THE BAND BACK TOGETHER : Slide 16 <-
+=========
+
+\# We can find out now when they broke up, if we remember their id.
+my $deleted_on                                                      # *DateTime structure
+    = $schema->resultset('ArtistEvent')
+    ->single( { artistid => $artist->id, event => 'delete' } )
+    \-> *triggered_on *;
+
+\# Find the state of the band was just before the breakup.
+my $state_before_breakup                                            # 50/50 to get undef
+    = $artist-> * state_at*( $deleted_on->subtract( seconds => 1 ) );
+
+\# Maybe this is common,
+\# so we have a column to link to who they used to be.
+my $previous_artist_id = delete $state_before_breakup->{artistid};
+
+say 'Red Herring' if ($previous_artist_id);                        # 50/50 
+
+-------------------------------------------------
+
+-> Lets get the band back together : Continue : Slide 17 <-
+=========
+
+\# Then we can form a new band, linked to the old,
+\# with the same values as the old band, but a new name.
+$artist = $schema->resultset('Artist')->create( {
+    %{$state_before_breakup},
+    *previousid* => $previous_artist_id,
+    *name*       => 'Red Herring',                } );
+
+artistid    name         last_name_change_id  previousid
+----------  -----------  -------------------  ----------
+*2           Red Herring  6                    1         *
+eventid  artistid  event       details                            
+-------  --------  ----------  -----------------------------------
+...
+7        1         update      {"last_name_change_id":6,"name":"Herring"}
+8        1         delete      {"last_name_change_id":6,"name":"Herring","artitstid":1}
+*9*        2         insert      {"name":"Red Herring","previousid":1,"artistid":2,"last_last_..._id":6}
+
+-------------------------------------------------
+
+-> THE DEAD POOL : Slide 18 <-
+=========
+
+\# After a few more name changes, split-ups, and getting back together,
+\# we find an event we should have considered, but didn't.
+my $death_event
+    = $artist-> *event*( death => { details => { who => 'drummer' } } );
+
+artistid    name         last_name_change_id  previousid
+----------  -----------  -------------------  ----------
+2           Red Herring  6                    1         
+
+eventid  artistid    event       details                            
+-------  ----------  ----------  -----------------------------------
+10       2           death       {"who":"drummer"}                  
+
+-------------------------------------------------
+
+-> Only a Rumor : Slide 19 <-
+=========
+
+\# but, we then go back and modify it to note that it was only a rumor
+$death_event-> *details*->{only_a_rumour} = 1;
+$death_event-> *make_column_dirty*('details'); # changing the hashref doesn't
+$death_event-> *update*;
+
+artistid    name         last_name_change_id  previousid
+----------  -----------  -------------------  ----------
+2           Red Herring  6                    1         
+eventid  artistid    event       details                            
+-------  ----------  ----------  -----------------------------------
+10       2           death       {"only_a_rumour":1,"who":"drummer"}
+
+-------------------------------------------------
+
+-> Too Old to Tour : Slide 20 <-
+=========
+
+\# And after even more new names and arguments, they split up again
+$artist-> *delete*;
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+`                                                      `
+eventid  artistid    event       details                            
+-------  ----------  ----------  -----------------------------------
+11       6           delete      {"last_name..._id":2,"previousid":1,"name":"Red Herring","artistid":2}
+
+-------------------------------------------------
+
+-> Compact Discs : Slide 21 <-
+===
+
+*NOT in DCE's POD*
+
+my $artist = $schema->resultset('Artist')->create( { name => 'Michael Jackson' } );
+my $cd = $schema->resultset('Cd')->create(
+        { artistid => $artist->artistid,
+          title    => 'Thriller',
+          year     =>  1982,
+        } );
+$cd->year(1984);
+$cd->update;
+
+-------------------------------------------------
+
+-> Compact Discs : Continued : Slide 22 <-
+===
+
+Artist      artistid    name             last_name_change_id  previousid
+!            ----------  ---------------  -------------------  ----------
+!            1           Michael Jackson                                 
+ArtistEvent eventid  artistid    event       details                                
+!            -------  ----------  ----------  ---------------------------------------
+!            1        1           insert      {"artistid":1,"name":"Michael Jackson"}
+Cd          cdid        artistid    title       year      
+!            ----------  ----------  ----------  ----------
+!            1           1           Thriller    1982      
+CdEvent     eventid   cdid        event       details                                               
+!            -------   ----------  ----------  ------------------------------------------------------
+!            1         1           insert      {"year":1982,"cdid":1,"title":"Thriller","artistid":1}
+!            2         1           update      {"year":1984}
+
+*You'll notice that the Cd table does not have last...change_id and previousid columns
+
+----
+
+-> # Code Archive : Slide 10 <-
+
+Complete archive will be on the MadMongers' github page
+    [MadMongers/08-2019-DBIx-Class-Events](https://github.com/MadMongers/08-2019-DBIx-Class-Events)
+
+home   dir----: My employee example
+theirs sub-dir: clone with *NO* changes
+gs     sub-dir: clone with changes
+
+
+----
+
+-> The End. Qs <-
+
+
+My Professional Bull Riders flack jacket sponsors are:     ;-)
+
+   [The Game Crafter](https://www.thegamecrafter.com)       Make your *dream* Board Game come TRUE
+
+   [Table Top Events](https://tabletop.events)       Your *next* Convention Management System (in the cloud)
+                                          Coming soon with AI BlockChain (  ;-)  )**2
+
+   [Twit.tv](https://twit.tv)                If it has a chip in it, we'll be talking about it
+
+

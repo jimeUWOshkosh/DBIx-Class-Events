@@ -1,0 +1,48 @@
+%title: DBIx::Class::Events
+%author: James Edwards
+%date: 2019-18-July
+
+-> D:C:E's example using D:C:DeploymentHandler : Slide 1 <-
+====
+
+$ cd p5-DBIx-Class-Events/t                  *# you may wish to copy the 't' dir someplace else!!
+$ sqlite3 db/example.db < db/example.sql
+$ bash db/dbicdump.sh                        *# this will wipe out their Schema-Result files
+     \# run from project home directory
+     dbicdump -o dump_directory=./lib \
+         -o components='["InflateColumn::DateTime"]' \
+         -o use_moose=1 \
+         -o debug=1 \
+         MyApp::Schema \
+         'dbi:SQLite:./db/example.db'
+
+Add stuff from POD in the zone after the
+DBIx::Class::Schema::Loader checksum
+          Don't need to add 'last_name_change_id', it be there
+	$ vi lib/MyApp/Schema/Result/Artist.pm
+	$ vi lib/MyApp/Schema/Result/ArtistEvents.pm
+
+----
+
+-> D:C:E's example using D:C:DeploymentHandler : Continue : Slide 2 <-
+
+$ bash db/dbicdump.sh 2> err.txt
+
+$ cat err.txt
+
+DBIx::Class::Relationship::HasOne::_validate_has_one_condition(): "might_have/has_one" must not be on columns with is_nullable set to true (MyApp::Schema::Result::Artist/last_name_change_id). This might indicate an incorrect use of those relationship helpers instead of belongs_to. at lib/MyApp/Schema/Result/Artist.pm line 201
+
+----
+
+-> D:C:E's example using D:C:DeploymentHandler : Continue : Slide 3 <-
+
+$ vi db/example.sql
+
+Artist table
+\>   "last_name_change_id" INTEGER NULL,
+<   "last_name_change_id" INTEGER NOT NULL DEFAULT -1,
+
+$ bash db/dbicdump.sh 
+
+$ perl t1.pl
+No Issues!!!!
