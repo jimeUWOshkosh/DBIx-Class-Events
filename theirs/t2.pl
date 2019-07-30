@@ -6,12 +6,12 @@ use MyApp::Schema;
 my $db_fn = 'db/example.db';
 my $schema = MyApp::Schema->connect("dbi:SQLite:$db_fn");
 
-my $artist = $schema->resultset('Artist')->create( { name => 'Michael Jackson' } );
+my $artist = $schema->resultset('Artist')->create( { name => 'Devo' } );
 my $cd = $schema->resultset('Cd')->create( 
 	{ artistid => $artist->artistid,
-	  title    => 'Thriller',
-	  year     =>  1984,
+	  title    => 'Freedom of Choice',
+	  year     =>  1980,
 	} );
-$cd->year(1985);
+$cd->year(1984);
 $cd->update;
 
