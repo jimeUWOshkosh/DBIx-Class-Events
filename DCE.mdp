@@ -28,13 +28,16 @@ Events can be used to track when things happen.
 
 My goal here is to NOT make this a firehose job.
 
-Your understanding/modification of the setup will have you
-looking at a sql of two tables ( your target and your new
-event table ) and Schema-Result modules of those two tables
-( in which you will be adding stuff to the 'save zone" in
-  those modules created by DBIx::Class::Schema::Loader )
-( OR if you roll your own Schema-Result modules, you already 
-  know where you to wish to place the stuff )
+
+Your understanding/modification of the setup will have you looking at a sql of two tables 
+
+( your target and your new event table ) and Schema-Result modules of those two tables
+
+( in which you will be adding stuff to the 'save zone" in those modules created by 
+  DBIx::Class::Schema::Loader )
+
+( OR if you roll your own Schema-Result modules, you already know where you to wish to 
+  place the stuff )
 
 ----
 
@@ -49,7 +52,7 @@ So I have broken my work into three sections (MDPs)
       Artist, CDs, Tracks tables in 3 separate event tables
     Note:
          DCE's POD example on the Artist table is more complex than the
-         DCE's example SQL for CDs and Tracks ( ~/t/db )
+         DCE's example SQL & Schema-Result for CDs and Tracks ( ~/t/db )
          See slides 21-22 in {DCE.mdp} this presentation
 
   My Employee example {DCEee.mdp}
@@ -68,11 +71,13 @@ This is using their SQL and their non-modified Schema files!!!
 $ git clone https://github.com/GrantStreetGroup/p5-DBIx-Class-Events.git
 $ cd p5-DBIx-Class-Events/t
 $ sqlite3 db/example.db < db/example.sql
-$ perl t1.pl                           # get this from my code archive
+
+\# get this from my code archive. it is the code example for the POD
+$ perl t1.pl                           
 
 -------------------------------------------------
 
--> Sample program in POD : Slide 5 <-
+-> Sample program in POD (first screen/page) : Slide 5 <-
 =========
 
 my $artist = $schema->resultset('Artist')->create( { name => 'Dead Salmon' } );
@@ -150,10 +155,21 @@ eventid  artistid  event       details
 -> Sample program in POD : Continue : Slide 9 <-
 
 \# Find their previous name
-my $name_change = $artist-> *last_name_change*;
+
+\# Artist.pm (has_one)
+\# ArtistEvent.artisteventid => self.last_name_change_id
+my $name_change = $artist-> *last_name_change*;    
+
 say $name_change-> *details*->{old};
 
 # Dead Salmon
+
+artistid    name        last_name_change_id  previousid
+----------  ----------  -------------------  ----------
+1           Trout        *2*
+eventid  artistid  event       details
+-------  --------  ----------  -----------------------------------
+*2*        1         name_change {"new":"Trout", *"old":"Dead Salmon"* }
 
 -------------------------------------------------
 
@@ -246,7 +262,7 @@ eventid  artistid  event       details
 \# Look up all the band's previous names
 print "$_\\n"
     for map { $_-> *details*->{old} }
-        $artist-> *events*->search( { event => 'name_change' } );
+        $artist-> *events*->search( { event => 'name_change' } );    \# Artist.pm  (has_many)
 # Dead Salmon
 # Trout
 # Fried Trout
@@ -288,17 +304,18 @@ eventid  artistid  event       details
 my $deleted_on                                                      # *DateTime structure
     = $schema->resultset('ArtistEvent')
     ->single( { artistid => $artist->id, event => 'delete' } )
-    \-> *triggered_on *;
+    \-> *triggered_on *;                                               # *Artist.pm attribute
 
 \# Find the state of the band was just before the breakup.
-my $state_before_breakup                                            # 50/50 to get undef
+\# DCE method *'state_at'
+\#   Takes a timestamp and returns the state of the thing at that timestamp as a hash reference.
+my $state_before_breakup                                            # *50/50 to get undef
     = $artist-> * state_at*( $deleted_on->subtract( seconds => 1 ) );
 
-\# Maybe this is common,
-\# so we have a column to link to who they used to be.
+\# Maybe this is common, so we have a column to link to who they used to be.
 my $previous_artist_id = delete $state_before_breakup->{artistid};
 
-say 'Red Herring' if ($previous_artist_id);                        # 50/50 
+say 'Red Herring' if ($previous_artist_id);                        # *50/50 
 
 -------------------------------------------------
 
@@ -330,7 +347,7 @@ eventid  artistid  event       details
 \# After a few more name changes, split-ups, and getting back together,
 \# we find an event we should have considered, but didn't.
 my $death_event
-    = $artist-> *event*( death => { details => { who => 'drummer' } } );
+    = $artist-> *event*( death => { details => { who => 'drummer' } } );     # *DCE method
 
 artistid    name         last_name_change_id  previousid
 ----------  -----------  -------------------  ----------
