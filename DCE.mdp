@@ -2,7 +2,7 @@
 %author: James Edwards
 %date: 2019-18-July
 
--> Log some database changes with DBIx::Class::Events : Slide 1 <-
+-> Log some events with DBIx::Class::Events : Slide 1 <-
 ====
 
 From POD:
@@ -23,10 +23,11 @@ Events can be used to track when things happen.
 
 ----
 
--> Log some database changes with DBIx::Class::Events : Slide 2 <-
+-> Log some events with DBIx::Class::Events : Slide 2 <-
 ====
 
 My goal here is to NOT make this a firehose job.
+
 
 
 Your understanding/modification of the setup will have you looking at a sql of two tables 
@@ -41,7 +42,7 @@ Your understanding/modification of the setup will have you looking at a sql of t
 
 ----
 
--> Log some database changes with DBIx::Class::Events : Slide 3 <-
+-> Log some events with DBIx::Class::Events : Slide 3 <-
 ====
 
 So I have broken my work into three sections (MDPs)
@@ -53,7 +54,7 @@ So I have broken my work into three sections (MDPs)
     Note:
          DCE's POD example on the Artist table is more complex than the
          DCE's example SQL & Schema-Result for CDs and Tracks ( ~/t/db )
-         See slides 21-22 in {DCE.mdp} this presentation
+         See slides 22-23 in {DCE.mdp} this presentation
 
   My Employee example {DCEee.mdp}
 
@@ -63,7 +64,18 @@ So I have broken my work into three sections (MDPs)
 
 ----
 
--> Basis : Slide 4 <-
+-> Log some events with DBIx::Class::Events : Slide 4 <-
+====
+
+There are different levels of Event Logging
+
+   Their event logging on the Artist table is complex
+   My employee event logging is less complex
+   Their event logging on the CD/Track tables is even less
+
+----
+
+-> Basis : Slide 5 <-
 ===
 
 This is using their SQL and their non-modified Schema files!!!
@@ -72,12 +84,12 @@ $ git clone https://github.com/GrantStreetGroup/p5-DBIx-Class-Events.git
 $ cd p5-DBIx-Class-Events/t
 $ sqlite3 db/example.db < db/example.sql
 
-\# get this from my code archive. it is the code example for the POD
+\# get this from my code archive. it is the code example from the POD
 $ perl t1.pl                           
 
 -------------------------------------------------
 
--> Sample program in POD (first screen/page) : Slide 5 <-
+-> Sample program in POD (first screen/page) : Slide 6 <-
 =========
 
 my $artist = $schema->resultset('Artist')->create( { name => 'Dead Salmon' } );
@@ -99,7 +111,7 @@ $artist->update;
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 6 <-
+-> Sample program in POD : Continue : Slide 7 <-
 
 my $artist = $schema->resultset('Artist')->create( { name => 'Dead Salmon' } );
 say $artist-> *events*->count;    # is now 1, an 'insert' event
@@ -120,7 +132,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 7 <-
+-> Sample program in POD : Continue : Slide 8 <-
 
 $artist-> *change_name*('Trout');    # add a name_change event
 
@@ -135,7 +147,7 @@ eventid  artistid    event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 8 <-
+-> Sample program in POD : Continue : Slide 9 <-
 
 `$artist->change_name('Trout');    # add a name_change event    `
 $artist->update;    # An update event, last_name_change_id and name
@@ -152,7 +164,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 9 <-
+-> Sample program in POD : Continue : Slide 10 <-
 
 \# Find their previous name
 
@@ -173,7 +185,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 10 <-
+-> Sample program in POD : Continue : Slide 11 <-
 
 \# Three more name_change events and one update event
 $artist-> *change_name*('Fried Trout');
@@ -194,7 +206,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 11 <-
+-> Sample program in POD : Continue : Slide 12 <-
 
 \# Three more name_change events and one update event
 `$artist->change_name('Fried Trout');                          `
@@ -215,7 +227,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 12 <-
+-> Sample program in POD : Continue : Slide 13 <-
 
 \# Three more name_change events and one update event
 `$artist->change_name('Fried Trout');                          `
@@ -236,7 +248,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 13 <-
+-> Sample program in POD : Continue : Slide 14 <-
 
 \# Three more name_change events and one update event
 `$artist->change_name('Fried Trout');                          `
@@ -257,7 +269,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 14 <-
+-> Sample program in POD : Continue : Slide 15 <-
 
 \# Look up all the band's previous names
 print "$_\\n"
@@ -277,7 +289,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> Sample program in POD : Continue : Slide 15 <-
+-> Sample program in POD : Continue : Slide 16 <-
 
 $artist->delete;    # and then they break up.   
 
@@ -297,7 +309,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> LETS GET THE BAND BACK TOGETHER : Slide 16 <-
+-> LETS GET THE BAND BACK TOGETHER : Slide 17 <-
 =========
 
 \# We can find out now when they broke up, if we remember their id.
@@ -319,7 +331,7 @@ say 'Red Herring' if ($previous_artist_id);                        # *50/50
 
 -------------------------------------------------
 
--> Lets get the band back together : Continue : Slide 17 <-
+-> Lets get the band back together : Continue : Slide 18 <-
 =========
 
 \# Then we can form a new band, linked to the old,
@@ -341,7 +353,7 @@ eventid  artistid  event       details
 
 -------------------------------------------------
 
--> THE DEAD POOL : Slide 18 <-
+-> THE DEAD POOL : Slide 19 <-
 =========
 
 \# After a few more name changes, split-ups, and getting back together,
@@ -359,13 +371,13 @@ eventid  artistid    event       details
 
 -------------------------------------------------
 
--> Only a Rumor : Slide 19 <-
+-> Only a Rumor : Slide 20 <-
 =========
 
 \# but, we then go back and modify it to note that it was only a rumor
-$death_event-> *details*->{only_a_rumour} = 1;
-$death_event-> *make_column_dirty*('details'); # changing the hashref doesn't
-$death_event-> *update*;
+$death_event-> *details*->{only_a_rumour} = 1;          # modifying attribute
+$death_event-> *make_column_dirty*('details');          # DBIx::Class::Row
+$death_event->update;
 
 artistid    name         last_name_change_id  previousid
 ----------  -----------  -------------------  ----------
@@ -376,11 +388,11 @@ eventid  artistid    event       details
 
 -------------------------------------------------
 
--> Too Old to Tour : Slide 20 <-
+-> Too Old to Tour : Slide 21 <-
 =========
 
 \# And after even more new names and arguments, they split up again
-$artist-> *delete*;
+$artist->delete;
 
 artistid    name        last_name_change_id  previousid
 ----------  ----------  -------------------  ----------
@@ -391,7 +403,7 @@ eventid  artistid    event       details
 
 -------------------------------------------------
 
--> Compact Discs : Slide 21 <-
+-> Compact Discs : Slide 22 <-
 ===
 
 *NOT in DCE's POD*
@@ -399,15 +411,16 @@ eventid  artistid    event       details
 my $artist = $schema->resultset('Artist')->create( { name => 'Devo' } );
 my $cd = $schema->resultset('Cd')->create(
         { artistid => $artist->artistid,
-          title    => 'Freedom of Choice',
+          title    => 'FreedomofChoice',
           year     =>  1980,
         } );
 $cd->year(1984);
+$cd->title('Freedom of Choice');
 $cd->update;
 
 -------------------------------------------------
 
--> Compact Discs : Continued : Slide 22 <-
+-> Compact Discs : Continued : Slide 23 <-
 ===
 
 Artist      artistid    name             last_name_change_id  previousid
@@ -423,12 +436,12 @@ Cd          cdid        artistid    title              year
 CdEvent     eventid   cdid        event       details                                               
 !            -------   ----------  ----------  ------------------------------------------------------
 !            1         1           insert      {"cdid":1,"artistid":3,"year":1980,"title":"Fre...oice"}
-!            2         1           update      {"year":1984}
+!            2         1           update      {"year":1984,"title":"Freedom of Choice"}
 *You'll notice that the Cd table does not have last_name_change_id and previousid columns
 
 ----
 
--> # Code Archive : Slide 23 <-
+-> # Code Archive : Slide 24 <-
 
 Complete archive will be on the MadMongers' github page
     [MadMongers/08-2019-DBIx-Class-Events](https://github.com/MadMongers/08-2019-DBIx-Class-Events)
